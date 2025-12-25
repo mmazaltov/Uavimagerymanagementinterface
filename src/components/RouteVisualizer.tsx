@@ -124,6 +124,7 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
         zoom={15}
         scrollWheelZoom={true}
         style={{ height: '400px', width: '100%', minHeight: '400px' }}
+        attributionControl={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -175,7 +176,7 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
       </MapContainer>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[1000]">
+      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[2000]">
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-white"></div>
@@ -200,7 +201,7 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
 
       {/* Flight info */}
       {showDetails && (
-        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[1000]">
+        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[2000]">
           <div className="space-y-1 text-xs">
             <div className="flex items-center gap-2">
               <Route className="w-3 h-3" />

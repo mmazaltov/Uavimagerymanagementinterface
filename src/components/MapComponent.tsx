@@ -115,6 +115,7 @@ export function MapComponent({ fields, onPointSelect, selectedPoint }: MapCompon
         zoom={13}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%', minHeight: '500px' }}
+        attributionControl={false}
       >
         <MapLayerControl showSatellite={showSatellite} />
 
@@ -147,7 +148,7 @@ export function MapComponent({ fields, onPointSelect, selectedPoint }: MapCompon
       </MapContainer>
 
       {/* Map Controls */}
-      <div className="absolute top-4 right-4 z-[1000]">
+      <div className="absolute top-4 right-4 z-[2000]">
         <Button
           variant="secondary"
           size="sm"
@@ -160,7 +161,7 @@ export function MapComponent({ fields, onPointSelect, selectedPoint }: MapCompon
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-lg z-[1000]">
+      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-lg z-[2000]">
         <h4 className="text-sm font-medium mb-2">Статус полей</h4>
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs">
