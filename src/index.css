@@ -3588,6 +3588,7 @@
 /* Leaflet map container fix */
 .leaflet-container {
   font-family: inherit;
+  border-radius: 0.5rem;
 }
 
 /* Ensure all Leaflet panes stay below custom controls */
@@ -3619,15 +3620,16 @@
   z-index: 700 !important;
 }
 
-/* Force our custom controls to stay on top with highest z-index */
-.absolute.z-\[2000\] {
-  z-index: 2000 !important;
-  pointer-events: auto !important;
+/* Leaflet control containers - keep them below our custom controls */
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 800 !important;
 }
 
-/* Ensure parent container doesn't clip our controls */
-.overflow-hidden > .absolute {
-  z-index: 2000 !important;
+/* Force our custom controls to stay visible and on top */
+.overflow-hidden .absolute {
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .leaflet-popup-content-wrapper {
