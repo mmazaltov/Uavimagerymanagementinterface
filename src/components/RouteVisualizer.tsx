@@ -118,12 +118,12 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
   });
 
   return (
-    <div className="relative w-full h-[400px] bg-gray-100 rounded-lg overflow-hidden">
+    <div className="relative w-full h-[400px] bg-gray-100 rounded-lg overflow-hidden" style={{ minHeight: '400px', height: '400px' }}>
       <MapContainer
         center={fieldCenter}
         zoom={15}
         scrollWheelZoom={true}
-        style={{ height: '100%', width: '100%' }}
+        style={{ height: '400px', width: '100%', minHeight: '400px' }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
