@@ -11,6 +11,8 @@ interface RouteVisualizerProps {
 }
 
 export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails = false }: RouteVisualizerProps) {
+  console.log('🗺️ RouteVisualizer mounted with props:', { fieldId, flightPattern, altitude, showDetails });
+
   // Mock field center coordinates (Moscow area)
   const fieldCenter = useMemo(() => {
     const centers: { [key: string]: [number, number] } = {
@@ -18,13 +20,16 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
       '2': [55.7512, 37.6145],
       '3': [55.7601, 37.6220],
     };
-    return centers[fieldId] || [55.7558, 37.6173];
+    const center = centers[fieldId] || [55.7558, 37.6173];
+    console.log('📍 Field center calculated:', center);
+    return center;
   }, [fieldId]);
 
   // Generate route points based on pattern
   const generateRoutePoints = useMemo((): [number, number][] => {
     const [centerLat, centerLng] = fieldCenter;
     const offset = 0.002; // ~200m offset
+    console.log('🛤️ Generating route points for pattern:', flightPattern);
 
     switch (flightPattern) {
       case 'zigzag':
@@ -83,6 +88,7 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
         return gridPoints;
 
       default:
+        console.log('⚠️ Unknown flight pattern, returning empty array');
         return [];
     }
   }, [fieldCenter, flightPattern]);
@@ -104,6 +110,12 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
       default: return pattern;
     }
   };
+
+  console.log('✅ RouteVisualizer rendering with:', {
+    fieldCenter,
+    routePoints: generateRoutePoints.length,
+    polylinePoints: routePointsForPolyline.length
+  });
 
   return (
     <div className="relative w-full h-[400px] bg-gray-100 rounded-lg overflow-hidden">
