@@ -118,14 +118,16 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
   });
 
   return (
-    <div className="relative w-full h-[400px] bg-gray-100 rounded-lg overflow-hidden" style={{ minHeight: '400px', height: '400px' }}>
-      <MapContainer
-        center={fieldCenter}
-        zoom={15}
-        scrollWheelZoom={true}
-        style={{ height: '400px', width: '100%', minHeight: '400px' }}
-        attributionControl={false}
-      >
+    <div className="relative w-full h-[400px] bg-gray-100 rounded-lg" style={{ minHeight: '400px', height: '400px' }}>
+      <div className="absolute inset-0 rounded-lg overflow-hidden">
+        <MapContainer
+          center={fieldCenter}
+          zoom={15}
+          scrollWheelZoom={true}
+          style={{ height: '400px', width: '100%', minHeight: '400px' }}
+          attributionControl={false}
+          zoomControl={false}
+        >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png"
@@ -174,9 +176,10 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
           );
         })}
       </MapContainer>
+      </div>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[2000]">
+      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[2000] pointer-events-auto">
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-white"></div>
@@ -201,7 +204,7 @@ export function RouteVisualizer({ fieldId, flightPattern, altitude, showDetails 
 
       {/* Flight info */}
       {showDetails && (
-        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[2000]">
+        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-lg z-[2000] pointer-events-auto">
           <div className="space-y-1 text-xs">
             <div className="flex items-center gap-2">
               <Route className="w-3 h-3" />
