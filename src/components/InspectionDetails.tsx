@@ -1243,12 +1243,23 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
                   <CardTitle>Траектория полета и покрытие</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <RouteVisualizer
-                    fieldId={inspection.fieldId}
-                    flightPattern={inspection.flightPattern}
-                    altitude={inspection.altitude}
-                    showDetails={true}
-                  />
+                  {(() => {
+                    console.log('🗺️ InspectionDetails map tab rendering with inspection data:', {
+                      fieldId: inspection.fieldId,
+                      flightPattern: inspection.flightPattern,
+                      altitude: inspection.altitude,
+                      inspectionId: inspection.id,
+                      fieldName: inspection.fieldName
+                    });
+                    return (
+                      <RouteVisualizer
+                        fieldId={inspection.fieldId}
+                        flightPattern={inspection.flightPattern}
+                        altitude={inspection.altitude}
+                        showDetails={true}
+                      />
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </TabsContent>
