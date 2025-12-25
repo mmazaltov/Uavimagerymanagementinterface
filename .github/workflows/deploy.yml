@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/website-preview-google-BhLK7
   workflow_dispatch:
 
 permissions:
