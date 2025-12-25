@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Calendar, Download, Eye, MapPin, Drone, AlertTriangle, CheckCircle, Upload, Loader2, Database, ExternalLink, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight, RotateCcw, RotateCw } from 'lucide-react';
+import { Calendar, Download, Eye, MapPin, Plane, AlertTriangle, CheckCircle, Upload, Loader2, Database, ExternalLink, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight, RotateCcw, RotateCw } from 'lucide-react';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner@2.0.3';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -674,7 +674,7 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Drone className="w-5 h-5" />
+                <Plane className="w-5 h-5" />
                 {inspection.fieldName} - {inspection.date}
               </CardTitle>
             </CardHeader>
