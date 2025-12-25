@@ -3,7 +3,6 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { MapPin, Satellite } from 'lucide-react';
 import { Button } from './ui/button';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 interface Field {
   id: string;
@@ -110,12 +109,12 @@ export function MapComponent({ fields, onPointSelect, selectedPoint }: MapCompon
   };
 
   return (
-    <div className="relative w-full min-h-[400px] md:h-96 bg-gray-100 rounded-lg overflow-hidden">
+    <div className="relative w-full h-[500px] bg-gray-100 rounded-lg overflow-hidden">
       <MapContainer
         center={[center.lat, center.lng]}
         zoom={13}
-        className="w-full h-full"
-        style={{ minHeight: '400px' }}
+        scrollWheelZoom={true}
+        style={{ height: '100%', width: '100%', minHeight: '500px' }}
       >
         <MapLayerControl showSatellite={showSatellite} />
 
