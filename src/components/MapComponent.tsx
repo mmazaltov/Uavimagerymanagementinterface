@@ -109,16 +109,15 @@ export function MapComponent({ fields, onPointSelect, selectedPoint }: MapCompon
   };
 
   return (
-    <div className="relative w-full h-[500px] bg-gray-100 rounded-lg">
-      <div className="absolute inset-0 rounded-lg overflow-hidden">
-        <MapContainer
-          center={[center.lat, center.lng]}
-          zoom={13}
-          scrollWheelZoom={true}
-          style={{ height: '100%', width: '100%', minHeight: '500px' }}
-          attributionControl={false}
-          zoomControl={false}
-        >
+    <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden" style={{ height: '500px' }}>
+      <MapContainer
+        center={[center.lat, center.lng]}
+        zoom={13}
+        scrollWheelZoom={true}
+        style={{ height: '100%', width: '100%' }}
+        attributionControl={false}
+        zoomControl={false}
+      >
         <MapLayerControl showSatellite={showSatellite} />
 
         {fields.map((field) => {
@@ -148,7 +147,6 @@ export function MapComponent({ fields, onPointSelect, selectedPoint }: MapCompon
           );
         })}
       </MapContainer>
-      </div>
 
       {/* Map Controls */}
       <div className="absolute top-4 right-4 z-[2000] pointer-events-auto">
