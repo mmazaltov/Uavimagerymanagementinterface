@@ -1,8 +1,6 @@
 import image_f58c2b45316a5aad7e54e39df8fbcfd03b464f7a from 'figma:asset/f58c2b45316a5aad7e54e39df8fbcfd03b464f7a.png';
 import image_5b3459d940e3b1ad0741a2f6119fb851198e7be3 from 'figma:asset/5b3459d940e3b1ad0741a2f6119fb851198e7be3.png';
-import image_5b3459d940e3b1ad0741a2f6119fb851198e7be3 from 'figma:asset/5b3459d940e3b1ad0741a2f6119fb851198e7be3.png';
 import image_41451096d569c3f7a18cd5c7c3cc8fe15d78d2f6 from 'figma:asset/41451096d569c3f7a18cd5c7c3cc8fe15d78d2f6.png';
-import image_f58c2b45316a5aad7e54e39df8fbcfd03b464f7a from 'figma:asset/f58c2b45316a5aad7e54e39df8fbcfd03b464f7a.png';
 import image_364a42715d8479658d1039ce05c5b0239a51c654 from 'figma:asset/364a42715d8479658d1039ce05c5b0239a51c654.png';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
