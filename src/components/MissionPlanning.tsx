@@ -703,12 +703,23 @@ export function MissionPlanning() {
               <TabsContent value="route" className="mt-4">
                 <Card>
                   <CardContent className="pt-6">
-                    <RouteVisualizer 
-                      fieldId={selectedMission.field.id} 
-                      flightPattern={selectedMission.flightPattern}
-                      altitude={selectedMission.altitude}
-                      showDetails
-                    />
+                    {(() => {
+                      console.log('🗺️ MissionPlanning route tab rendering with mission data:', {
+                        fieldId: selectedMission.field.id,
+                        flightPattern: selectedMission.flightPattern,
+                        altitude: selectedMission.altitude,
+                        missionId: selectedMission.id,
+                        fieldName: selectedMission.field.name
+                      });
+                      return (
+                        <RouteVisualizer
+                          fieldId={selectedMission.field.id}
+                          flightPattern={selectedMission.flightPattern}
+                          altitude={selectedMission.altitude}
+                          showDetails
+                        />
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               </TabsContent>
