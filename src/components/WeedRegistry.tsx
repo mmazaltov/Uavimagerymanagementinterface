@@ -1,7 +1,3 @@
-import image_f58c2b45316a5aad7e54e39df8fbcfd03b464f7a from 'figma:asset/f58c2b45316a5aad7e54e39df8fbcfd03b464f7a.png';
-import image_5b3459d940e3b1ad0741a2f6119fb851198e7be3 from 'figma:asset/5b3459d940e3b1ad0741a2f6119fb851198e7be3.png';
-import image_41451096d569c3f7a18cd5c7c3cc8fe15d78d2f6 from 'figma:asset/41451096d569c3f7a18cd5c7c3cc8fe15d78d2f6.png';
-import image_364a42715d8479658d1039ce05c5b0239a51c654 from 'figma:asset/364a42715d8479658d1039ce05c5b0239a51c654.png';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -12,6 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Search, Plus, Leaf, MapPin, AlertTriangle, Upload } from 'lucide-react';
 
+// Weed images from Unsplash
+const weedImages = {
+  dandelion: 'https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?w=400&h=400&fit=crop&q=80',
+  crabgrass: 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=400&h=400&fit=crop&q=80',
+  pigweed: 'https://images.unsplash.com/photo-1628352081506-83c43123ed6d?w=400&h=400&fit=crop&q=80',
+  thistle: 'https://images.unsplash.com/photo-1595608121062-2b5e0c8e8c7f?w=400&h=400&fit=crop&q=80',
+};
+
 const mockWeeds = [
   {
     id: '1',
@@ -21,7 +25,7 @@ const mockWeeds = [
     severity: 'Medium',
     description: 'Обычный многолетний сорняк с желтыми цветами. Распространяется семенами, разносимыми ветром.',
     controlMethods: ['Механическое удаление', 'Селективный гербицид', 'Культурный контроль'],
-    image: image_364a42715d8479658d1039ce05c5b0239a51c654,
+    image: weedImages.dandelion,
     detectedIn: ['Северное поле A', 'Западное поле D'],
     totalCount: 45,
     averageDensity: 3.2
@@ -34,7 +38,7 @@ const mockWeeds = [
     severity: 'High',
     description: 'Однолетний злаковый сорняк, агрессивно конкурирующий с культурами за питательные вещества и воду.',
     controlMethods: ['Довсходовый гербицид', 'Послевсходовый гербицид', 'Севооборот'],
-    image: image_f58c2b45316a5aad7e54e39df8fbcfd03b464f7a,
+    image: weedImages.crabgrass,
     detectedIn: ['Северное поле A', 'Южное поле B'],
     totalCount: 78,
     averageDensity: 5.8
@@ -47,7 +51,7 @@ const mockWeeds = [
     severity: 'High',
     description: 'Быстрорастущий однолетний сорняк, способный достигать значительной высоты и затенять культуры.',
     controlMethods: ['Вспашка', 'Применение гербицидов', 'Ручное удаление'],
-    image: image_41451096d569c3f7a18cd5c7c3cc8fe15d78d2f6,
+    image: weedImages.pigweed,
     detectedIn: ['Западное поле D'],
     totalCount: 23,
     averageDensity: 2.1
@@ -60,7 +64,7 @@ const mockWeeds = [
     severity: 'Medium',
     description: 'Многолетний сорняк с глубокой корневой системой. Фиолетовые цветы и колючие листья.',
     controlMethods: ['Системный гербицид', 'Повторное скашивание', 'Биологический контроль'],
-    image: image_5b3459d940e3b1ad0741a2f6119fb851198e7be3,
+    image: weedImages.thistle,
     detectedIn: ['Южное поле B'],
     totalCount: 12,
     averageDensity: 1.4
