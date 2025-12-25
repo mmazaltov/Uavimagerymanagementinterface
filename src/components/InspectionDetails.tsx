@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { RouteVisualizer } from './RouteVisualizer';
 import { Calendar, Download, Eye, MapPin, Plane, AlertTriangle, CheckCircle, Upload, Loader2, Database, ExternalLink, ZoomIn, ZoomOut, Maximize2, ChevronLeft, ChevronRight, RotateCcw, RotateCw } from 'lucide-react';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner@2.0.3';
@@ -21,6 +22,7 @@ const mockInspections = [
   {
     id: '1',
     fieldName: 'Северное поле A',
+    fieldId: '1',
     date: '2024-09-20',
     time: '14:30',
     status: 'completed',
@@ -35,12 +37,15 @@ const mockInspections = [
       { weed: 'Росичка', count: 8, confidence: 0.87 }
     ],
     flightPath: 'Систематический сеточный паттерн',
+    flightPattern: 'grid',
+    altitude: 100,
     weather: 'Ясно, 22°C, ветер 5 км/ч',
     report: 'inspection_report_20240920.pdf'
   },
   {
     id: '2',
     fieldName: 'Южное поле B',
+    fieldId: '2',
     date: '2024-09-18',
     time: '10:15',
     status: 'completed',
@@ -55,12 +60,15 @@ const mockInspections = [
       { weed: 'Щирица', count: 3, confidence: 0.94 }
     ],
     flightPath: 'Целевая инспекция',
+    flightPattern: 'circular',
+    altitude: 80,
     weather: 'Переменная облачность, 19°C, ветер 8 км/ч',
     report: 'inspection_report_20240918.pdf'
   },
   {
     id: '3',
     fieldName: 'Западное поле D',
+    fieldId: '3',
     date: '2024-09-19',
     time: '16:45',
     status: 'processing',
@@ -72,6 +80,8 @@ const mockInspections = [
     weedsDetected: null,
     detectionResults: [],
     flightPath: 'Периметр и центр',
+    flightPattern: 'zigzag',
+    altitude: 90,
     weather: '����сно, 25°C, ветер 3 км/ч',
     report: null
   }
@@ -1233,13 +1243,12 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
                   <CardTitle>Траектория полета и покрытие</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">
-                    <div className="text-center">
-                      <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-                      <p className="text-muted-foreground">Визуализация траектории полета</p>
-                      <p className="text-sm text-muted-foreground">Паттерн: {inspection.flightPath}</p>
-                    </div>
-                  </div>
+                  <RouteVisualizer
+                    fieldId={inspection.fieldId}
+                    flightPattern={inspection.flightPattern}
+                    altitude={inspection.altitude}
+                    showDetails={true}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
