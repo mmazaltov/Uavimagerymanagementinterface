@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - claude/website-preview-google-BhLK7
+      - cv_agro_code
   workflow_dispatch:
 
 permissions:
