@@ -3,7 +3,7 @@ name: Deploy Staging to GitHub Pages
 on:
   push:
     branches:
-      - staging
+      - claude/staging-BhLK7
   workflow_dispatch:
 
 permissions:

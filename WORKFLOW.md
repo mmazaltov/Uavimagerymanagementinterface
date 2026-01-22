@@ -12,10 +12,10 @@
 - **Workflow**: `.github/workflows/deploy.yml`
 
 ### 2. **Staging (Тестовое окружение)** 🧪
-- **Ветка**: `staging`
+- **Ветка**: `claude/staging-BhLK7`
 - **URL**: https://mmazaltov.github.io/Uavimagerymanagementinterface-staging/
 - **Назначение**: Тестирование новых функций перед релизом в production
-- **Деплой**: Автоматический при push в `staging`
+- **Деплой**: Автоматический при push в `claude/staging-BhLK7`
 - **Workflow**: `.github/workflows/deploy-staging.yml`
 
 ---
@@ -24,9 +24,9 @@
 
 ### Шаг 1: Разработка новых функций
 
-1. Переключитесь на ветку `staging`:
+1. Переключитесь на ветку `claude/staging-BhLK7`:
    ```bash
-   git checkout staging
+   git checkout claude/staging-BhLK7
    ```
 
 2. Создайте feature ветку от staging (опционально):
@@ -44,16 +44,16 @@
 
 ### Шаг 2: Тестирование в Staging
 
-1. Запушьте изменения в ветку `staging`:
+1. Запушьте изменения в ветку `claude/staging-BhLK7`:
    ```bash
-   git push origin staging
+   git push origin claude/staging-BhLK7
    ```
 
    Или если работаете в feature ветке:
    ```bash
-   git checkout staging
+   git checkout claude/staging-BhLK7
    git merge feature/new-functionality
-   git push origin staging
+   git push origin claude/staging-BhLK7
    ```
 
 2. GitHub Actions автоматически задеплоит изменения на staging URL
@@ -81,9 +81,9 @@
    git checkout main
    ```
 
-2. Смержите изменения из `staging`:
+2. Смержите изменения из `claude/staging-BhLK7`:
    ```bash
-   git merge staging
+   git merge claude/staging-BhLK7
    ```
 
 3. Запушьте в `main`:
@@ -121,7 +121,7 @@ npm run preview
 
 ```bash
 # Переключиться на staging для новых изменений
-git checkout staging
+git checkout claude/staging-BhLK7
 
 # Переключиться на main для релиза
 git checkout main
@@ -148,14 +148,14 @@ git log --oneline -5
 ## Важные правила ⚠️
 
 ### ✅ МОЖНО:
-- Вносить любые изменения в `staging` ветку
+- Вносить любые изменения в `claude/staging-BhLK7` ветку
 - Тестировать экспериментальные функции в staging
 - Делать несколько коммитов перед релизом в main
 - Откатывать изменения в staging если что-то сломалось
 
 ### ❌ НЕЛЬЗЯ:
 - Пушить напрямую в `main` без тестирования в staging
-- Удалять ветку `staging` или `main`
+- Удалять ветку `claude/staging-BhLK7` или `main`
 - Изменять файлы конфигурации деплоя без понимания последствий
 - Коммитить секреты или credentials
 
@@ -223,9 +223,9 @@ git log --oneline -5
 
 **В staging (безопасно):**
 ```bash
-git checkout staging
+git checkout claude/staging-BhLK7
 git reset --hard HEAD~1  # Откатить последний коммит
-git push origin staging --force
+git push origin claude/staging-BhLK7 --force
 ```
 
 **В production (осторожно!):**
