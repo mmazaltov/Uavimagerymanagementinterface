@@ -10,10 +10,10 @@ import { Search, Plus, Leaf, MapPin, AlertTriangle, Upload } from 'lucide-react'
 
 // Weed images - specific to each weed type
 const weedImages = {
-  dandelion: 'https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?w=400&h=400&fit=crop&q=80', // Одуванчик - желтый цветок
-  crabgrass: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=400&h=400&fit=crop&q=80', // Росичка - злаковый сорняк
-  pigweed: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=400&fit=crop&q=80', // Щирица - широколистное растение
-  thistle: 'https://images.unsplash.com/photo-1597868165956-03a6827955b1?w=400&h=400&fit=crop&q=80', // Полевой осот - чертополох с колючками
+  dandelion: 'https://images.unsplash.com/photo-1525923838299-2312b60f6d69?w=600&h=600&fit=crop&q=80', // Одуванчик - желтый цветок одуванчика
+  crabgrass: 'https://images.unsplash.com/photo-1592150621744-aca45f3f9aa6?w=600&h=600&fit=crop&q=80', // Росичка - злаковый сорняк, узкие листья
+  pigweed: 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=600&h=600&fit=crop&q=80', // Щирица - широколистный сорняк
+  thistle: 'https://images.unsplash.com/photo-1595246140625-573b715d11dc?w=600&h=600&fit=crop&q=80', // Полевой осот - чертополох с фиолетовыми цветами
 };
 
 const mockWeeds = [
