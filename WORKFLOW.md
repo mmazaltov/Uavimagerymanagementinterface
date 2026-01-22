@@ -172,9 +172,7 @@ git log --oneline -5
 │   ├── CNAME                       # Домен e3a.ru (только в production ветке)
 │   └── .nojekyll                   # Отключает Jekyll в GitHub Pages
 ├── src/                            # Исходный код приложения
-├── vite.config.ts                  # Конфигурация Vite
-│                                   # staging: base: '/Uavimagerymanagementinterface-staging/'
-│                                   # production: base: '/'
+├── vite.config.ts                  # Конфигурация Vite (base: '/' в обеих ветках)
 └── package.json                    # Зависимости проекта
 ```
 
