@@ -8,12 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Search, Plus, Leaf, MapPin, AlertTriangle, Upload } from 'lucide-react';
 
-// Weed images - uploaded to imgbb
+// Weed images - direct links from imgbb
 const weedImages = {
-  dandelion: 'https://ibb.co/Ndqp7DkV', // Одуванчик
-  crabgrass: 'https://ibb.co/6JN2wzMT', // Росичка
-  pigweed: 'https://ibb.co/DgMfvkjw', // Щирица
-  thistle: 'https://ibb.co/5gFTMSQF', // Полевой осот
+  dandelion: 'https://i.ibb.co/DHFkLc6V/image.jpg', // Одуванчик
+  crabgrass: 'https://i.ibb.co/wrYTgVkP/image.jpg', // Росичка
+  pigweed: 'https://i.ibb.co/mFy52tPh/image.webp', // Щирица
+  thistle: 'https://i.ibb.co/dwgBWVNg/image.jpg', // Полевой осот
 };
 
 const mockWeeds = [
