@@ -1,11 +1,68 @@
 
-  # UAV Imagery Management Interface (Copy)
+# UAV Imagery Management Interface
 
-  This is a code bundle for UAV Imagery Management Interface (Copy). The original project is available at https://www.figma.com/design/TyoFIDi2AT2bQ7kW5wSqAX/UAV-Imagery-Management-Interface--Copy-.
+Интерфейс управления изображениями БПЛА для мониторинга сельскохозяйственных угодий и обнаружения сорняков.
 
-  ## Running the code
+## Возможности
 
-  Run `npm i` to install the dependencies.
+### Панель аналитики
 
-  Run `npm run dev` to start the development server.
-  
+- **Столбчатая диаграмма** — статистика обнаружения сорняков с интерактивным drill-down
+- **Круговая диаграмма** — распределение сорняков по типам с анимацией сегментов
+- **Drill-down функциональность** — клик по столбцу, сегменту круга или элементу легенды показывает динамику обнаружений по снимкам в виде AreaChart
+- **Связанные диаграммы** — круговая и столбчатая диаграммы синхронизированы для единого UX
+
+### Функции диаграмм
+
+- Полупрозрачные тултипы с размытием фона
+- Адаптивная ширина тултипов (~35 символов)
+- Обрезка длинных названий с многоточием
+- Hover-эффекты на столбцах и сегментах
+- Кнопка возврата из режима детализации
+
+### API эндпоинты
+
+- `/weed-stats-all` — агрегированная статистика по всем сорнякам
+- `/weed-detection-stats/:imageFileName` — статистика для конкретного изображения
+- `/inspection-stats/:inspectionId` — статистика по инспекции
+
+## Запуск
+
+```bash
+# Установка зависимостей
+npm install
+
+# Запуск dev-сервера (порт 5173)
+npm run dev
+
+# Сборка для production
+npm run build
+```
+
+## Технологии
+
+- React + TypeScript
+- Vite
+- Recharts (диаграммы)
+- Tailwind CSS
+- Supabase (база данных)
+- Lucide React (иконки)
+
+## Структура проекта
+
+```
+src/
+├── components/
+│   ├── Analytics.tsx    # Панель аналитики с диаграммами
+│   ├── ui/              # UI компоненты (Card, Badge, Tabs и др.)
+│   └── ...
+├── supabase/
+│   └── functions/
+│       └── server/      # API эндпоинты
+└── utils/
+    └── supabase/        # Конфигурация Supabase
+```
+
+## Лицензия
+
+Проект основан на дизайне из [Figma](https://www.figma.com/design/TyoFIDi2AT2bQ7kW5wSqAX/UAV-Imagery-Management-Interface--Copy-).
