@@ -1,17 +1,113 @@
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Calendar, Leaf } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Calendar, Leaf, Loader2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
 
-const weedDetectionData = [
-  { month: 'Апр', dandelion: 12, crabgrass: 8, pigweed: 5, thistle: 3 },
-  { month: 'Май', dandelion: 18, crabgrass: 15, pigweed: 12, thistle: 7 },
-  { month: 'Июн', dandelion: 25, crabgrass: 22, pigweed: 18, thistle: 9 },
-  { month: 'Июл', dandelion: 32, crabgrass: 28, pigweed: 20, thistle: 12 },
-  { month: 'Авг', dandelion: 28, crabgrass: 25, pigweed: 16, thistle: 8 },
-  { month: 'Сен', dandelion: 23, crabgrass: 18, pigweed: 12, thistle: 6 }
+// Color palette for charts
+const CHART_COLORS = [
+  '#ef4444', '#f59e0b', '#10b981', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316'
 ];
+
+// Truncate label to max length with ellipsis
+const truncateLabel = (label: string, maxLength: number = 20): string => {
+  if (label.length <= maxLength) return label;
+  return label.slice(0, maxLength) + '...';
+};
+
+interface WeedStat {
+  plant_name: string;
+  count: number;
+  confidence: number;
+}
+
+interface RawWeedStat {
+  plant_name: string;
+  count: number;
+  image_file_name: string;
+}
+
+interface DrillDownData {
+  name: string;
+  date: string;
+  count: number;
+}
+
+// Custom tooltip for bar chart - fixed width, semi-transparent background
+const CustomBarTooltip = ({ active, payload, label, allData }: any) => {
+  if (active && payload && payload.length) {
+    const top10 = allData?.slice(0, 10) || [];
+    return (
+      <div
+        className="border border-gray-300 rounded-lg shadow-lg p-3"
+        style={{
+          width: '280px', // ~35 characters
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(4px)'
+        }}
+      >
+        <p
+          className="font-semibold text-gray-900 mb-2 text-sm border-b pb-2 truncate"
+          title={label}
+        >
+          {truncateLabel(label, 32)}
+        </p>
+        <p className="text-xs text-gray-600 mb-2">
+          Количество: <span className="font-bold text-gray-900">{payload[0].value}</span>
+        </p>
+        {top10.length > 1 && (
+          <div className="space-y-0.5">
+            {top10.map((item: any, index: number) => (
+              <div
+                key={index}
+                className={`flex justify-between text-xs ${item.name === label ? 'font-bold text-gray-900' : 'text-gray-600'}`}
+              >
+                <span className="truncate mr-2" title={item.name} style={{ maxWidth: '200px' }}>
+                  {index + 1}. {truncateLabel(item.name, 25)}
+                </span>
+                <span className="font-medium">{item.count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom tooltip for pie chart - shows only selected area data
+const CustomPieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div
+        className="border border-gray-300 rounded-lg shadow-lg p-3"
+        style={{
+          width: '280px', // ~35 characters
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(4px)'
+        }}
+      >
+        <p
+          className="font-semibold text-gray-900 mb-2 text-sm border-b pb-2 truncate"
+          title={data.name}
+        >
+          {truncateLabel(data.name, 32)}
+        </p>
+        <p className="text-xs text-gray-600">
+          Количество: <span className="font-bold text-gray-900">{data.value}</span>
+        </p>
+        <p className="text-xs text-gray-600">
+          Доля: <span className="font-bold text-gray-900">{data.percentage}%</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const fieldComparisonData = [
   { field: 'Северное A', weeds: 45, treated: 38, efficiency: 84 },
@@ -29,7 +125,8 @@ const treatmentEffectivenessData = [
   { week: 'Неделя 6', pretreatment: 12, posttreatment: 8 }
 ];
 
-const weedDistributionData = [
+// Fallback data when DB is empty
+const fallbackWeedData = [
   { name: 'Одуванчик', value: 126, color: '#ef4444' },
   { name: 'Росичка', value: 98, color: '#f59e0b' },
   { name: 'Щирица', value: 67, color: '#10b981' },
@@ -44,6 +141,163 @@ const cropDensityData = [
 ];
 
 export function Analytics() {
+  const [weedStats, setWeedStats] = useState<WeedStat[]>([]);
+  const [rawWeedStats, setRawWeedStats] = useState<RawWeedStat[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAllLegend, setShowAllLegend] = useState(false);
+  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
+  const [drillDownWeed, setDrillDownWeed] = useState<string | null>(null);
+  const [drillDownData, setDrillDownData] = useState<DrillDownData[]>([]);
+
+  // Load weed detection stats directly from Supabase REST API
+  useEffect(() => {
+    const loadWeedStats = async () => {
+      setIsLoading(true);
+      try {
+        // Direct REST API call to Supabase - include image_file_name for drill-down
+        const url = `https://${projectId}.supabase.co/rest/v1/weed_detection_stats?select=plant_name,count,image_file_name`;
+        console.log('Loading weed stats from Supabase REST API:', url);
+
+        const response = await fetch(url, {
+          headers: {
+            'apikey': publicAnonKey,
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const rawData = await response.json();
+        console.log('Raw weed stats from DB:', rawData.length, 'records');
+
+        if (rawData && rawData.length > 0) {
+          // Save raw data for drill-down
+          setRawWeedStats(rawData.map((stat: { plant_name: string; count: number; image_file_name: string }) => ({
+            plant_name: stat.plant_name || 'Неизвестный сорняк',
+            count: stat.count || 0,
+            image_file_name: stat.image_file_name || 'unknown',
+          })));
+
+          // Aggregate by plant_name on client side
+          const aggregated = new Map<string, { plant_name: string; count: number }>();
+
+          rawData.forEach((stat: { plant_name: string; count: number }) => {
+            const plantName = stat.plant_name || 'Неизвестный сорняк';
+
+            if (aggregated.has(plantName)) {
+              const existing = aggregated.get(plantName)!;
+              existing.count += stat.count || 0;
+            } else {
+              aggregated.set(plantName, {
+                plant_name: plantName,
+                count: stat.count || 0,
+              });
+            }
+          });
+
+          // Sort by count descending
+          const result = Array.from(aggregated.values())
+            .sort((a, b) => b.count - a.count);
+
+          console.log('Aggregated weed stats:', result.length, 'unique plants');
+          setWeedStats(result.map(item => ({ ...item, confidence: 0 })));
+        } else {
+          setRawWeedStats([]);
+          setWeedStats([]);
+        }
+      } catch (error) {
+        console.error('Error loading weed stats:', error);
+        setWeedStats([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadWeedStats();
+  }, []);
+
+  // Handle drill-down click on bar
+  const handleBarClick = (data: { name: string; count: number }) => {
+    const weedName = data.name;
+
+    // Filter raw data for the selected weed and aggregate by image
+    const weedData = rawWeedStats.filter(stat => stat.plant_name === weedName);
+
+    // Group by image_file_name to create time series
+    const byImage = new Map<string, number>();
+    weedData.forEach((stat: RawWeedStat) => {
+      const key = stat.image_file_name;
+      byImage.set(key, (byImage.get(key) || 0) + stat.count);
+    });
+
+    // Convert to array and sort by image name (which often contains date info)
+    const timeSeriesData: DrillDownData[] = Array.from(byImage.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map((entry, index) => ({
+        name: weedName,
+        date: `Снимок ${index + 1}`,
+        count: entry[1],
+      }));
+
+    setDrillDownData(timeSeriesData);
+    setDrillDownWeed(weedName);
+  };
+
+  // Handle back from drill-down
+  const handleBackFromDrillDown = () => {
+    setDrillDownWeed(null);
+    setDrillDownData([]);
+  };
+
+  // Prepare data for bar chart
+  const barChartData = weedStats.length > 0
+    ? weedStats.map((stat, index) => ({
+        name: stat.plant_name,
+        count: stat.count,
+        fill: CHART_COLORS[index % CHART_COLORS.length]
+      }))
+    : fallbackWeedData.map((item, index) => ({
+        name: item.name,
+        count: item.value,
+        fill: item.color
+      }));
+
+  // Prepare data for pie chart with percentages - TOP 10 + Others
+  const totalCount = barChartData.reduce((sum: number, item: { count: number }) => sum + item.count, 0);
+
+  // Get top 10 items
+  const top10Items = barChartData.slice(0, 10);
+  const remainingItems = barChartData.slice(10);
+  const othersCount = remainingItems.reduce((sum: number, item: { count: number }) => sum + item.count, 0);
+
+  // Build pie chart data with top 10 + "Другие" if there are more items
+  const pieChartData = top10Items.map((item: { name: string; count: number }, index: number) => ({
+    name: item.name,
+    value: item.count,
+    color: CHART_COLORS[index % CHART_COLORS.length],
+    percentage: totalCount > 0 ? Math.round((item.count / totalCount) * 100) : 0
+  }));
+
+  // Add "Другие" category if there are remaining items
+  if (othersCount > 0) {
+    pieChartData.push({
+      name: 'Другие',
+      value: othersCount,
+      color: '#9ca3af', // Gray color for "Others"
+      percentage: totalCount > 0 ? Math.round((othersCount / totalCount) * 100) : 0
+    });
+  }
+
+  // Full data for legend expansion
+  const fullLegendData = barChartData.map((item: { name: string; count: number }, index: number) => ({
+    name: item.name,
+    value: item.count,
+    color: CHART_COLORS[index % CHART_COLORS.length],
+    percentage: totalCount > 0 ? Math.round((item.count / totalCount) * 100) : 0
+  }));
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -136,21 +390,132 @@ export function Analytics() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Тренды обнаружения сорняков со временем</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  {drillDownWeed ? (
+                    <>
+                      <button
+                        onClick={handleBackFromDrillDown}
+                        className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                        title="Назад к общей статистике"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                      <span>Динамика: {truncateLabel(drillDownWeed, 25)}</span>
+                    </>
+                  ) : (
+                    <>
+                      Статистика обнаружения сорняков
+                      {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                    </>
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={weedDetectionData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="dandelion" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.8} />
-                    <Area type="monotone" dataKey="crabgrass" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.8} />
-                    <Area type="monotone" dataKey="pigweed" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.8} />
-                    <Area type="monotone" dataKey="thistle" stackId="1" stroke="#6366f1" fill="#6366f1" fillOpacity={0.8} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-[400px]">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Загрузка данных...</span>
+                  </div>
+                ) : drillDownWeed ? (
+                  /* Drill-down AreaChart view */
+                  <ResponsiveContainer width="100%" height={400}>
+                    <AreaChart
+                      data={drillDownData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                    >
+                      <defs>
+                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="date"
+                        angle={-45}
+                        textAnchor="end"
+                        interval={0}
+                        height={60}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis
+                        label={{ value: 'Количество', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          backdropFilter: 'blur(4px)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(value: number) => [value, 'Обнаружено']}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#6366f1"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorCount)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  /* Main BarChart view */
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart
+                      data={barChartData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                    >
+                      <defs>
+                        <filter id="barShadow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.3"/>
+                        </filter>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        interval={0}
+                        height={80}
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value, index) => truncateLabel(value, index === 0 ? 20 : 30)}
+                      />
+                      <YAxis
+                        label={{ value: 'Количество', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                      />
+                      <Tooltip
+                        content={<CustomBarTooltip allData={barChartData} />}
+                        cursor={false}
+                      />
+                      <Bar
+                        dataKey="count"
+                        name="Количество"
+                        radius={[4, 4, 0, 0]}
+                        onClick={(data: { name: string; count: number }) => handleBarClick(data)}
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={(_data: unknown, _index: number, e: React.MouseEvent) => {
+                          if (e && e.target) {
+                            (e.target as SVGElement).style.filter = 'url(#barShadow)';
+                            (e.target as SVGElement).style.transform = 'scaleY(1.02)';
+                            (e.target as SVGElement).style.transformOrigin = 'bottom';
+                          }
+                        }}
+                        onMouseLeave={(_data: unknown, _index: number, e: React.MouseEvent) => {
+                          if (e && e.target) {
+                            (e.target as SVGElement).style.filter = 'none';
+                            (e.target as SVGElement).style.transform = 'scaleY(1)';
+                          }
+                        }}
+                      >
+                        {barChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -159,38 +524,108 @@ export function Analytics() {
                 <CardTitle>Распределение сорняков</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={weedDistributionData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {weedDistributionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={pieChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={40}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                          label={({ percentage }: { percentage: number }) => `${percentage}%`}
+                          labelLine={{ stroke: '#666', strokeWidth: 1 }}
+                          onMouseEnter={(_: unknown, index: number) => setActivePieIndex(index)}
+                          onMouseLeave={() => setActivePieIndex(null)}
+                          onClick={(data: { name: string; value: number }) => {
+                            // Skip "Другие" category - it's an aggregate
+                            if (data.name !== 'Другие') {
+                              handleBarClick({ name: data.name, count: data.value });
+                            }
+                          }}
+                          activeIndex={activePieIndex !== null ? activePieIndex : undefined}
+                          activeShape={(props: any) => {
+                            const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+                            return (
+                              <g>
+                                <path
+                                  d={`M ${cx + (outerRadius + 6) * Math.cos(-startAngle * Math.PI / 180)},${cy + (outerRadius + 6) * Math.sin(-startAngle * Math.PI / 180)}
+                                     A ${outerRadius + 6},${outerRadius + 6} 0 ${endAngle - startAngle > 180 ? 1 : 0},0 ${cx + (outerRadius + 6) * Math.cos(-endAngle * Math.PI / 180)},${cy + (outerRadius + 6) * Math.sin(-endAngle * Math.PI / 180)}
+                                     L ${cx + innerRadius * Math.cos(-endAngle * Math.PI / 180)},${cy + innerRadius * Math.sin(-endAngle * Math.PI / 180)}
+                                     A ${innerRadius},${innerRadius} 0 ${endAngle - startAngle > 180 ? 1 : 0},1 ${cx + innerRadius * Math.cos(-startAngle * Math.PI / 180)},${cy + innerRadius * Math.sin(-startAngle * Math.PI / 180)}
+                                     Z`}
+                                  fill={fill}
+                                  style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}
+                                />
+                              </g>
+                            );
+                          }}
+                        >
+                          {pieChartData.map((entry: { color: string }, index: number) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              style={{ outline: 'none', cursor: 'pointer' }}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomPieTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-2 space-y-0.5">
+                      {/* Show top 10 legend items - smaller text, clickable for drill-down */}
+                      {(showAllLegend ? fullLegendData : pieChartData).map((entry: { name: string; color: string; value: number; percentage: number }, index: number) => (
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between text-xs leading-tight ${entry.name !== 'Другие' ? 'cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1' : ''}`}
+                          onClick={() => {
+                            if (entry.name !== 'Другие') {
+                              handleBarClick({ name: entry.name, count: entry.value });
+                            }
+                          }}
+                          title={entry.name !== 'Другие' ? `Нажмите для детализации: ${entry.name}` : entry.name}
+                        >
+                          <div className="flex items-center gap-1">
+                            <div
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            <span className="truncate" style={{ maxWidth: '300px' }}>
+                              {truncateLabel(entry.name, 42)}
+                            </span>
+                          </div>
+                          <span className="font-medium text-gray-700">{entry.value} ({entry.percentage}%)</span>
+                        </div>
                       ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-4 space-y-2">
-                  {weedDistributionData.map((entry, index) => (
-                    <div key={index} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: entry.color }}
-                        />
-                        <span>{entry.name}</span>
-                      </div>
-                      <span className="font-medium">{entry.value}</span>
+                      {/* Toggle button to show all items */}
+                      {barChartData.length > 10 && (
+                        <button
+                          onClick={() => setShowAllLegend(!showAllLegend)}
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1 w-full justify-center"
+                        >
+                          {showAllLegend ? (
+                            <>
+                              <ChevronUp className="w-3 h-3" />
+                              Скрыть ({barChartData.length - 10})
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-3 h-3" />
+                              Ещё {barChartData.length - 10}
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -8,12 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Search, Plus, Leaf, MapPin, AlertTriangle, Upload } from 'lucide-react';
 
-// Weed images - specific to each weed type
+// Weed images - direct links from imgbb
 const weedImages = {
-  dandelion: 'https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?w=400&h=400&fit=crop&q=80', // Одуванчик - желтый цветок
-  crabgrass: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=400&h=400&fit=crop&q=80', // Росичка - злаковый сорняк
-  pigweed: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=400&fit=crop&q=80', // Щирица - широколистное растение
-  thistle: 'https://images.unsplash.com/photo-1597868165956-03a6827955b1?w=400&h=400&fit=crop&q=80', // Полевой осот - чертополох с колючками
+  dandelion: 'https://i.ibb.co/DHFkLc6V/image.jpg', // Одуванчик
+  crabgrass: 'https://i.ibb.co/wrYTgVkP/image.jpg', // Росичка
+  pigweed: 'https://i.ibb.co/mFy52tPh/image.webp', // Щирица
+  thistle: 'https://i.ibb.co/dwgBWVNg/image.jpg', // Полевой осот
 };
 
 const mockWeeds = [
