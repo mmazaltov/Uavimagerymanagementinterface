@@ -299,6 +299,66 @@ app.get("/make-server-7e600dc3/weed-detection-stats/:imageFileName", async (c) =
   }
 });
 
+// Get all aggregated weed detection stats (groups by plant_name and sums count)
+app.get("/make-server-7e600dc3/weed-stats-all", async (c) => {
+  try {
+    console.log('=== Fetching all aggregated weed detection stats ===');
+
+    // Query all weed detection stats from the table
+    const { data, error } = await supabase
+      .from('weed_detection_stats')
+      .select('*');
+
+    if (error) {
+      console.log('Error querying weed_detection_stats:', error.message);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    if (!data || data.length === 0) {
+      console.log('No stats found in weed_detection_stats table');
+      return c.json({ success: true, stats: [] });
+    }
+
+    console.log(`Found ${data.length} total detection records in database`);
+
+    // Aggregate by plant_name
+    const aggregated = new Map();
+
+    data.forEach((stat: any) => {
+      const plantName = stat.plant_name || 'Неизвестный сорняк';
+
+      if (aggregated.has(plantName)) {
+        const existing = aggregated.get(plantName);
+        existing.count += stat.count || 0;
+        existing.confidenceSum += stat.confidence || 0;
+        existing.confidenceCount += 1;
+      } else {
+        aggregated.set(plantName, {
+          plant_name: plantName,
+          count: stat.count || 0,
+          confidenceSum: stat.confidence || 0,
+          confidenceCount: 1
+        });
+      }
+    });
+
+    // Calculate average confidence for each plant and sort by count descending
+    const result = Array.from(aggregated.values())
+      .map(item => ({
+        plant_name: item.plant_name,
+        count: item.count,
+        confidence: item.confidenceSum / item.confidenceCount
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    console.log(`Aggregated into ${result.length} unique plant types:`, result);
+    return c.json({ success: true, stats: result });
+  } catch (error) {
+    console.log(`Error fetching all weed stats: ${error}`, error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
 // Get aggregated weed detection stats for inspection (groups by plant_name and sums count)
 app.get("/make-server-7e600dc3/inspection-stats/:inspectionId", async (c) => {
   try {
