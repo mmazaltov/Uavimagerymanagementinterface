@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -6,17 +6,43 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Search, Plus, Leaf, MapPin, AlertTriangle, Upload } from 'lucide-react';
+import { Search, Plus, Leaf, MapPin, AlertTriangle, Upload, ChevronLeft, ChevronRight, Images } from 'lucide-react';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
 
-// Weed images - direct links from imgbb
-const weedImages = {
-  dandelion: 'https://i.ibb.co/DHFkLc6V/image.jpg', // Одуванчик
-  crabgrass: 'https://i.ibb.co/wrYTgVkP/image.jpg', // Росичка
-  pigweed: 'https://i.ibb.co/mFy52tPh/image.webp', // Щирица
-  thistle: 'https://i.ibb.co/dwgBWVNg/image.jpg', // Полевой осот
+type WeedSeverity = 'High' | 'Medium' | 'Low';
+
+type WeedEntry = {
+  id: string;
+  name: string;
+  scientificName: string;
+  category: string;
+  severity: WeedSeverity;
+  description: string;
+  controlMethods: string[];
+  images: string[];
+  detectedIn: string[];
+  totalCount: number;
+  averageDensity: number;
 };
 
-const mockWeeds = [
+// Weed images - existing remote sources + local registry assets
+const weedImages = {
+  dandelion: ['https://i.ibb.co/DHFkLc6V/image.jpg'], // Одуванчик
+  crabgrass: ['https://i.ibb.co/wrYTgVkP/image.jpg'], // Росичка
+  pigweed: ['https://i.ibb.co/mFy52tPh/image.webp'], // Щирица
+  thistle: ['https://i.ibb.co/dwgBWVNg/image.jpg'], // Полевой осот
+  bindweed: ['/plants/vyunok/vyunok_1.jpg', '/plants/vyunok/vyunok_2.jpg'], // Вьюнок
+  blackBindweed: ['/plants/gorets-vyunkovyi/gorets-vyunkovyi_1.jpg', '/plants/gorets-vyunkovyi/gorets-vyunkovyi_2.jpg'], // Горец вьюнковый
+  ladyThumb: ['/plants/gorets-pochechui/gorets-pochechui_1.jpg', '/plants/gorets-pochechui/gorets-pochechui_2.jpg'], // Горец почечуйный
+  broadleafGroup: ['/plants/dvodolnye/dvodolnye_1.jpg', '/plants/dvodolnye/dvodolnye_2.jpg'], // Двудольные
+  grassesGroup: ['/plants/zlakovye/zlakovye_1.jpg', '/plants/zlakovye/zlakovye_2.jpg'], // Злаковые
+  chenopodsGroup: ['/plants/marevye/marevye_1.jpg', '/plants/marevye/marevye_2.jpg'], // Маревые
+  sowthistleGroup: ['/plants/osot-bodyak-latuk/osot-bodyak-latuk_1.jpg', '/plants/osot-bodyak-latuk/osot-bodyak-latuk_2.jpg'], // Осот, бодяк, латук
+  horsetail: ['/plants/hvoshch/hvoshch_1.jpg', '/plants/hvoshch/hvoshch_2.jpg'], // Хвощ
+  mintFamily: ['/plants/chistec-pikulnik-yasnotka/chistec-pikulnik-yasnotka_1.jpg', '/plants/chistec-pikulnik-yasnotka/chistec-pikulnik-yasnotka_2.jpg'], // Чистец, пикульник, яснотка однолетние
+};
+
+const mockWeeds: WeedEntry[] = [
   {
     id: '1',
     name: 'Одуванчик',
@@ -25,7 +51,7 @@ const mockWeeds = [
     severity: 'Medium',
     description: 'Обычный многолетний сорняк с желтыми цветами. Распространяется семенами, разносимыми ветром.',
     controlMethods: ['Механическое удаление', 'Селективный гербицид', 'Культурный контроль'],
-    image: weedImages.dandelion,
+    images: weedImages.dandelion,
     detectedIn: ['Северное поле A', 'Западное поле D'],
     totalCount: 45,
     averageDensity: 3.2
@@ -38,7 +64,7 @@ const mockWeeds = [
     severity: 'High',
     description: 'Однолетний злаковый сорняк, агрессивно конкурирующий с культурами за питательные вещества и воду.',
     controlMethods: ['Довсходовый гербицид', 'Послевсходовый гербицид', 'Севооборот'],
-    image: weedImages.crabgrass,
+    images: weedImages.crabgrass,
     detectedIn: ['Северное поле A', 'Южное поле B'],
     totalCount: 78,
     averageDensity: 5.8
@@ -51,7 +77,7 @@ const mockWeeds = [
     severity: 'High',
     description: 'Быстрорастущий однолетний сорняк, способный достигать значительной высоты и затенять культуры.',
     controlMethods: ['Вспашка', 'Применение гербицидов', 'Ручное удаление'],
-    image: weedImages.pigweed,
+    images: weedImages.pigweed,
     detectedIn: ['Западное поле D'],
     totalCount: 23,
     averageDensity: 2.1
@@ -64,10 +90,127 @@ const mockWeeds = [
     severity: 'Medium',
     description: 'Многолетний сорняк с глубокой корневой системой. Фиолетовые цветы и колючие листья.',
     controlMethods: ['Системный гербицид', 'Повторное скашивание', 'Биологический контроль'],
-    image: weedImages.thistle,
+    images: weedImages.thistle,
     detectedIn: ['Южное поле B'],
     totalCount: 12,
     averageDensity: 1.4
+  },
+  {
+    id: '5',
+    name: 'Вьюнок',
+    scientificName: 'Convolvulus arvensis',
+    category: 'Широколистный, вьющееся',
+    severity: 'High',
+    description: 'Многолетний вьющийся сорняк с бело-розовыми воронковидными цветками. Размножается семенами и корневыми отпрысками, оплетает культуры и угнетает их.',
+    controlMethods: ['Системные гербициды по вегетации', 'Повторное скашивание', 'Глубокая обработка почвы'],
+    images: weedImages.bindweed,
+    detectedIn: ['Северное поле A', 'Восточное поле C'],
+    totalCount: 31,
+    averageDensity: 2.7
+  },
+  {
+    id: '6',
+    name: 'Горец вьюнковый',
+    scientificName: 'Fallopia convolvulus',
+    category: 'Широколистный, однолетний',
+    severity: 'Medium',
+    description: 'Однолетняя лиана с треугольными листьями, обвивает растения и затрудняет уборку. Даёт обильный самосев.',
+    controlMethods: ['Предпосевное боронование', 'Селективные гербициды против двудольных', 'Севооборот'],
+    images: weedImages.blackBindweed,
+    detectedIn: ['Западное поле D', 'Южное поле B'],
+    totalCount: 19,
+    averageDensity: 1.6
+  },
+  {
+    id: '7',
+    name: 'Горец почечуйный',
+    scientificName: 'Persicaria maculosa',
+    category: 'Широколистный, однолетний',
+    severity: 'Medium',
+    description: 'Однолетний сорняк влажных мест с характерным тёмным пятном на листьях. Быстро образует семена и засоряет посевы.',
+    controlMethods: ['Довсходовые гербициды', 'Механическое удаление до семяобразования', 'Поддержание чистоты канав и меж'],
+    images: weedImages.ladyThumb,
+    detectedIn: ['Южное поле B'],
+    totalCount: 14,
+    averageDensity: 1.1
+  },
+  {
+    id: '8',
+    name: 'Двудольные',
+    scientificName: 'Dicotyledones spp.',
+    category: 'Широколистные',
+    severity: 'Medium',
+    description: 'Сборная группа двудольных сорняков, конкурирующих с культурами за свет, влагу и элементы питания.',
+    controlMethods: ['Селективные гербициды против двудольных', 'Механическая междурядная обработка', 'Покровные культуры и севооборот'],
+    images: weedImages.broadleafGroup,
+    detectedIn: ['Северное поле A', 'Восточное поле C', 'Западное поле D'],
+    totalCount: 62,
+    averageDensity: 4.5
+  },
+  {
+    id: '9',
+    name: 'Злаковые',
+    scientificName: 'Poaceae spp.',
+    category: 'Злаковые',
+    severity: 'Medium',
+    description: 'Группа однолетних и многолетних злаковых сорняков. Быстро кущатся и вытесняют культурные растения.',
+    controlMethods: ['Гербициды против злаков', 'Севооборот', 'Контроль всходов до кущения'],
+    images: weedImages.grassesGroup,
+    detectedIn: ['Северное поле A', 'Восточное поле C'],
+    totalCount: 54,
+    averageDensity: 3.9
+  },
+  {
+    id: '10',
+    name: 'Маревые (Марь, Лебеда, Кохия, Солянка)',
+    scientificName: 'Amaranthaceae (Chenopodiaceae) spp.',
+    category: 'Широколистные',
+    severity: 'Medium',
+    description: 'Группа маревых с быстрым ростом и высоким семенным продуктивом. Хорошо адаптируются к засушливым условиям.',
+    controlMethods: ['Раннее рыхление и боронование', 'Селективные гербициды против двудольных', 'Снижение семенного банка'],
+    images: weedImages.chenopodsGroup,
+    detectedIn: ['Западное поле D', 'Южное поле B'],
+    totalCount: 27,
+    averageDensity: 2.3
+  },
+  {
+    id: '11',
+    name: 'Осот, бодяк, латук',
+    scientificName: 'Asteraceae: Sonchus/Cirsium/Lactuca spp.',
+    category: 'Широколистные, корнеотпрысковые',
+    severity: 'High',
+    description: 'Многолетние сорняки семейства астровых с мощной корневой системой. Трудноискоренимы, быстро восстанавливаются после скашивания.',
+    controlMethods: ['Системные гербициды по розеткам', 'Повторное скашивание', 'Истощение корневой системы'],
+    images: weedImages.sowthistleGroup,
+    detectedIn: ['Южное поле B', 'Восточное поле C'],
+    totalCount: 22,
+    averageDensity: 1.8
+  },
+  {
+    id: '12',
+    name: 'Хвощ',
+    scientificName: 'Equisetum arvense',
+    category: 'Хвощевые',
+    severity: 'High',
+    description: 'Многолетний корневищный сорняк влажных и кислых почв. Имеет весенние спороносные побеги и летние зелёные стебли.',
+    controlMethods: ['Известкование кислых почв', 'Улучшение дренажа', 'Системные гербициды и механическое истощение'],
+    images: weedImages.horsetail,
+    detectedIn: ['Северное поле A'],
+    totalCount: 16,
+    averageDensity: 1.2
+  },
+  {
+    id: '13',
+    name: 'Чистец, пикульник, яснотка однолетние',
+    scientificName: 'Lamiaceae: Stachys/Galeopsis/Lamium spp.',
+    category: 'Широколистные',
+    severity: 'Medium',
+    description: 'Однолетние губоцветные с четырёхгранными стеблями и супротивными листьями. Засоряют посевы зерновых и пропашных культур.',
+    controlMethods: ['Предпосевная обработка почвы', 'Селективные гербициды против двудольных', 'Севооборот'],
+    images: weedImages.mintFamily,
+    detectedIn: ['Восточное поле C', 'Западное поле D'],
+    totalCount: 18,
+    averageDensity: 1.5
   }
 ];
 
@@ -75,6 +218,10 @@ export function WeedRegistry() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWeed, setSelectedWeed] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [weedCountsByName, setWeedCountsByName] = useState<Record<string, number>>({});
+  const [totalDetections, setTotalDetections] = useState(0);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   const filteredWeeds = mockWeeds.filter(weed =>
     weed.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -101,6 +248,79 @@ export function WeedRegistry() {
   };
 
   const selectedWeedData = selectedWeed ? mockWeeds.find(w => w.id === selectedWeed) : null;
+  const selectedImages = selectedWeedData?.images ?? [];
+
+  useEffect(() => {
+    const loadWeedCounts = async () => {
+      setIsLoadingStats(true);
+      try {
+        const url = `https://${projectId}.supabase.co/rest/v1/weed_detection_stats?select=plant_name,count`;
+        const response = await fetch(url, {
+          headers: {
+            'apikey': publicAnonKey,
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const rawData: { plant_name: string | null; count: number | null }[] = await response.json();
+
+        const aggregated = new Map<string, number>();
+        let total = 0;
+
+        rawData.forEach((stat) => {
+          const rawName = (stat.plant_name || '').trim();
+          if (!rawName) return;
+          if (rawName.toLowerCase().startsWith('нераспознанные')) return;
+
+          const baseName = rawName.includes(' - ')
+            ? rawName.split(' - ')[0].trim()
+            : rawName;
+          if (!baseName) return;
+
+          const count = stat.count || 0;
+          total += count;
+          aggregated.set(baseName, (aggregated.get(baseName) || 0) + count);
+        });
+
+        setWeedCountsByName(Object.fromEntries(aggregated.entries()));
+        setTotalDetections(total);
+      } catch (error) {
+        console.error('Error loading weed stats:', error);
+        setWeedCountsByName({});
+        setTotalDetections(0);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    loadWeedCounts();
+  }, []);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [selectedWeed]);
+
+  const handlePrevImage = () => {
+    if (!selectedWeedData || selectedImages.length < 2) return;
+    setSelectedImageIndex((prev) => (prev - 1 + selectedImages.length) % selectedImages.length);
+  };
+
+  const handleNextImage = () => {
+    if (!selectedWeedData || selectedImages.length < 2) return;
+    setSelectedImageIndex((prev) => (prev + 1) % selectedImages.length);
+  };
+
+  const getWeedTotalCount = (weed: WeedEntry) => {
+    return weedCountsByName[weed.name] ?? 0;
+  };
+
+  const detectedHighSeverity = mockWeeds.filter(
+    (weed) => weed.severity === 'High' && getWeedTotalCount(weed) > 0,
+  ).length;
 
   return (
     <div className="p-6 space-y-6">
@@ -189,12 +409,18 @@ export function WeedRegistry() {
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     {/* Weed Image */}
-                    <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
+                    <div className="aspect-video rounded-lg overflow-hidden bg-gray-100 relative">
                       <ImageWithFallback
-                        src={weed.image}
+                        src={weed.images[0]}
                         alt={weed.name}
                         className="w-full h-full object-cover"
                       />
+                      {weed.images.length > 1 && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] text-white">
+                          <Images className="h-3 w-3" />
+                          {weed.images.length}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -215,7 +441,7 @@ export function WeedRegistry() {
                         </div>
                         <div className="flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />
-                          <span>{weed.totalCount} обнаружено</span>
+                          <span>{isLoadingStats ? '…' : getWeedTotalCount(weed)} обнаружено</span>
                         </div>
                       </div>
 
@@ -243,7 +469,14 @@ export function WeedRegistry() {
         </div>
 
         {/* Weed Details Panel */}
-        <div className="space-y-4">
+        <div
+          className="space-y-4 self-start overflow-auto"
+          style={{
+            position: 'sticky',
+            top: '1.5rem',
+            maxHeight: 'calc(100vh - 1.5rem)',
+          }}
+        >
           <Card>
             <CardHeader>
               <CardTitle>Детали сорняка</CardTitle>
@@ -252,14 +485,29 @@ export function WeedRegistry() {
               {selectedWeedData ? (
                 <div className="space-y-4">
                   {/* Weed Image */}
-                  <div className="aspect-video rounded-lg overflow-hidden">
+                  <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
                     <ImageWithFallback
                       key={selectedWeedData.id}
-                      src={selectedWeedData.image}
+                      src={selectedImages[selectedImageIndex] ?? selectedWeedData.images[0]}
                       alt={selectedWeedData.name}
                       className="w-full h-full object-cover"
                     />
                   </div>
+                  {selectedImages.length > 1 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <Button variant="outline" size="sm" onClick={handlePrevImage}>
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Предыдущее
+                      </Button>
+                      <span className="text-muted-foreground">
+                        {selectedImageIndex + 1} / {selectedImages.length}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={handleNextImage}>
+                        Следующее
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Basic Info */}
                   <div className="space-y-3">
@@ -290,7 +538,7 @@ export function WeedRegistry() {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-muted-foreground">Всего обнаружено</p>
-                        <p>{selectedWeedData.totalCount}</p>
+                        <p>{isLoadingStats ? '…' : getWeedTotalCount(selectedWeedData)}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">Средн. плотность</p>
@@ -350,18 +598,20 @@ export function WeedRegistry() {
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span>Всего типов сорняков</span>
-                <span className="font-medium">{mockWeeds.length}</span>
+                <span className="font-medium">
+                  {isLoadingStats ? '…' : Object.keys(weedCountsByName).length}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Высокая серьезность</span>
                 <span className="font-medium text-red-600">
-                  {mockWeeds.filter(w => w.severity === 'High').length}
+                  {isLoadingStats ? '…' : detectedHighSeverity}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Всего обнаружений</span>
                 <span className="font-medium">
-                  {mockWeeds.reduce((sum, w) => sum + w.totalCount, 0)}
+                  {isLoadingStats ? '…' : totalDetections}
                 </span>
               </div>
             </CardContent>
