@@ -87,7 +87,7 @@ export default function App() {
           </SidebarContent>
         </Sidebar>
 
-        <SidebarInset className="flex-1">
+        <SidebarInset className="flex-1 min-h-0">
           <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
             <SidebarTrigger className="-ml-1" />
             <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export default function App() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 min-h-0 overflow-auto">
             {renderContent()}
           </main>
         </SidebarInset>
