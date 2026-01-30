@@ -419,4 +419,39 @@ app.get("/make-server-7e600dc3/inspection-stats/:inspectionId", async (c) => {
   }
 });
 
+// Get all unique plant names from weed_detection_stats table
+app.get("/make-server-7e600dc3/unique-plants", async (c) => {
+  try {
+    console.log('=== Fetching unique plant names ===');
+
+    // Query all distinct plant names from the table
+    const { data, error } = await supabase
+      .from('weed_detection_stats')
+      .select('plant_name');
+
+    if (error) {
+      console.log('Error querying weed_detection_stats:', error.message);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    if (!data || data.length === 0) {
+      console.log('No records found in weed_detection_stats table');
+      return c.json({ success: true, plants: [] });
+    }
+
+    // Extract unique plant names and filter out nulls/empty strings
+    const uniquePlants = [...new Set(
+      data
+        .map((item: any) => item.plant_name)
+        .filter((name: string | null) => name && name.trim() !== '')
+    )].sort();
+
+    console.log(`Found ${uniquePlants.length} unique plant names:`, uniquePlants);
+    return c.json({ success: true, plants: uniquePlants, total: uniquePlants.length });
+  } catch (error) {
+    console.log(`Error fetching unique plants: ${error}`, error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
 Deno.serve(app.fetch);
