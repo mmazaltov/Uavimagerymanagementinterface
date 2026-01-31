@@ -157,21 +157,30 @@ app.get("/make-server-7e600dc3/snapshots/:inspectionId", async (c) => {
     const snapshots = await kv.getByPrefix(`snapshot:${inspectionId}:`);
     console.log('Snapshots found:', snapshots.length);
     
-    // Create signed URLs for images
+    // Create signed URLs for images and thumbnails
     const snapshotsWithUrls = await Promise.all(
       snapshots.map(async (snapshot: any) => {
+        let imageUrl = null;
+        let thumbnailUrl = null;
         if (snapshot.imagePath) {
           const { data: signedUrlData } = await supabase.storage
             .from(bucketName)
             .createSignedUrl(snapshot.imagePath, 3600); // 1 hour expiry
           
           console.log('Created signed URL for:', snapshot.imagePath, !!signedUrlData?.signedUrl);
-          return {
-            ...snapshot,
-            imageUrl: signedUrlData?.signedUrl || null,
-          };
+          imageUrl = signedUrlData?.signedUrl || null;
         }
-        return snapshot;
+        if (snapshot.thumbnailPath) {
+          const { data: thumbUrlData } = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(snapshot.thumbnailPath, 3600);
+          thumbnailUrl = thumbUrlData?.signedUrl || null;
+        }
+        return {
+          ...snapshot,
+          imageUrl,
+          thumbnailUrl,
+        };
       })
     );
     
@@ -201,6 +210,7 @@ app.post("/make-server-7e600dc3/snapshots", async (c) => {
     const coordinates = formData.get('coordinates') as string;
     const description = formData.get('description') as string;
     const imageFile = formData.get('image') as File;
+    const thumbnailFile = formData.get('thumbnail') as File;
 
     console.log('Form data received:', { inspectionId, name, date, coordinates, description, hasImage: !!imageFile });
 
@@ -210,6 +220,7 @@ app.post("/make-server-7e600dc3/snapshots", async (c) => {
     }
 
     let imagePath = null;
+    let thumbnailPath = null;
 
     // Upload image to Supabase Storage if provided
     if (imageFile && imageFile.size > 0) {
@@ -236,6 +247,26 @@ app.post("/make-server-7e600dc3/snapshots", async (c) => {
       console.log('Image uploaded successfully to:', imagePath);
     }
 
+    // Upload thumbnail if provided
+    if (thumbnailFile && thumbnailFile.size > 0) {
+      const thumbExt = thumbnailFile.name.split('.').pop() || 'webp';
+      const thumbFileName = `${inspectionId}/thumbs/${Date.now()}.${thumbExt}`;
+      const thumbBuffer = await thumbnailFile.arrayBuffer();
+      const { data: thumbUploadData, error: thumbUploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(thumbFileName, thumbBuffer, {
+          contentType: thumbnailFile.type || 'image/webp',
+          upsert: false,
+        });
+
+      if (thumbUploadError) {
+        console.log(`Thumbnail upload error: ${thumbUploadError.message}`, thumbUploadError);
+      } else {
+        thumbnailPath = thumbUploadData.path;
+        console.log('Thumbnail uploaded successfully to:', thumbnailPath);
+      }
+    }
+
     // Save snapshot metadata to KV store
     const snapshotId = `snapshot:${inspectionId}:${Date.now()}`;
     const snapshotData = {
@@ -246,6 +277,7 @@ app.post("/make-server-7e600dc3/snapshots", async (c) => {
       coordinates: coordinates || '',
       description: description || '',
       imagePath,
+      thumbnailPath,
       createdAt: new Date().toISOString(),
     };
 
@@ -253,7 +285,7 @@ app.post("/make-server-7e600dc3/snapshots", async (c) => {
     await kv.set(snapshotId, snapshotData);
     console.log('Snapshot saved to KV store successfully');
 
-    // Get signed URL for immediate use
+    // Get signed URLs for immediate use
     let imageUrl = null;
     if (imagePath) {
       const { data: signedUrlData } = await supabase.storage
@@ -262,14 +294,81 @@ app.post("/make-server-7e600dc3/snapshots", async (c) => {
       imageUrl = signedUrlData?.signedUrl || null;
       console.log('Signed URL created:', !!imageUrl);
     }
+    let thumbnailUrl = null;
+    if (thumbnailPath) {
+      const { data: thumbUrlData } = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(thumbnailPath, 3600);
+      thumbnailUrl = thumbUrlData?.signedUrl || null;
+    }
 
     console.log('=== Snapshot created successfully ===');
     return c.json({ 
       success: true, 
-      snapshot: { ...snapshotData, imageUrl } 
+      snapshot: { ...snapshotData, imageUrl, thumbnailUrl } 
     });
   } catch (error) {
     console.log(`Error creating snapshot: ${error}`, error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Upload or update thumbnail for an existing snapshot
+app.post("/make-server-7e600dc3/snapshots/:snapshotId/thumbnail", async (c) => {
+  try {
+    const snapshotId = c.req.param('snapshotId');
+    const formData = await c.req.formData();
+    const thumbnailFile = formData.get('thumbnail') as File;
+
+    if (!thumbnailFile || thumbnailFile.size === 0) {
+      return c.json({ success: false, error: 'Missing thumbnail file' }, 400);
+    }
+
+    const snapshot = await kv.get(snapshotId);
+    if (!snapshot) {
+      return c.json({ success: false, error: 'Snapshot not found' }, 404);
+    }
+
+    const thumbExt = thumbnailFile.name.split('.').pop() || 'webp';
+    const thumbFileName = snapshot.thumbnailPath
+      ? snapshot.thumbnailPath
+      : `${snapshot.inspectionId}/thumbs/${Date.now()}.${thumbExt}`;
+
+    const thumbBuffer = await thumbnailFile.arrayBuffer();
+    const { data: thumbUploadData, error: thumbUploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(thumbFileName, thumbBuffer, {
+        contentType: thumbnailFile.type || 'image/webp',
+        upsert: true,
+      });
+
+    if (thumbUploadError) {
+      console.log(`Thumbnail upload error: ${thumbUploadError.message}`, thumbUploadError);
+      return c.json({ success: false, error: `Thumbnail upload failed: ${thumbUploadError.message}` }, 500);
+    }
+
+    const thumbnailPath = thumbUploadData.path;
+    const updatedSnapshot = {
+      ...snapshot,
+      thumbnailPath,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await kv.set(snapshotId, updatedSnapshot);
+
+    const { data: thumbUrlData } = await supabase.storage
+      .from(bucketName)
+      .createSignedUrl(thumbnailPath, 3600);
+
+    return c.json({
+      success: true,
+      snapshot: {
+        ...updatedSnapshot,
+        thumbnailUrl: thumbUrlData?.signedUrl || null,
+      },
+    });
+  } catch (error) {
+    console.log(`Error uploading thumbnail: ${error}`, error);
     return c.json({ success: false, error: String(error) }, 500);
   }
 });

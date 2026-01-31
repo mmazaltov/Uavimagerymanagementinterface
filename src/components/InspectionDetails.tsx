@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -13,6 +13,7 @@ import { Calendar, Download, Eye, MapPin, Plane, AlertTriangle, CheckCircle, Upl
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner@2.0.3';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { VirtualizedGrid } from './ui/virtualized-grid';
 
 interface InspectionDetailsProps {
   inspectionId: string | null;
@@ -115,6 +116,12 @@ const mockUAVImages = [
 ];
 
 export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
+  const INITIAL_VISIBLE_COUNT = 12;
+  const LOAD_MORE_COUNT = 12;
+  const DEFAULT_THUMB_WIDTH = 480;
+  const DEFAULT_THUMB_HEIGHT = 270;
+  const THUMB_QUALITY = 0.8;
+
   const [selectedInspection, setSelectedInspection] = useState(inspectionId || '1');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -136,6 +143,11 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
   const [showAllDetections, setShowAllDetections] = useState(false);
   const [inspectionStats, setInspectionStats] = useState<any[]>([]);
   const [isLoadingInspectionStats, setIsLoadingInspectionStats] = useState(false);
+  const [visibleSnapshotCount, setVisibleSnapshotCount] = useState(INITIAL_VISIBLE_COUNT);
+  const [visibleDetectionCount, setVisibleDetectionCount] = useState(INITIAL_VISIBLE_COUNT);
+  const [isGeneratingThumbnails, setIsGeneratingThumbnails] = useState(false);
+  const thumbnailJobsRef = useRef<Set<string>>(new Set());
+  const backfillRunningRef = useRef(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -148,30 +160,112 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
 
   const inspection = mockInspections.find(i => i.id === selectedInspection) || mockInspections[0];
 
+  const visibleUploadedSnapshots = uploadedSnapshots.slice(0, visibleSnapshotCount);
+  const visibleRecognizeImages = recognizeImages.slice(0, visibleDetectionCount);
+  const visibleMockImages = mockUAVImages.slice(0, visibleDetectionCount);
+
   // Function to generate thumbnail URL for preview (lower quality)
-  const getThumbnailUrl = (originalUrl: string): string => {
+  const getThumbnailUrl = (originalUrl: string, width = 480, height = 270, quality = 60): string => {
     if (!originalUrl) return originalUrl;
     
-    // For Supabase Storage signed URLs
     if (originalUrl.includes('supabase.co/storage')) {
-      // Add transformation parameters for lower quality preview
-      const url = new URL(originalUrl);
-      url.searchParams.set('width', '400');
-      url.searchParams.set('quality', '60');
-      return url.toString();
+      return originalUrl;
     }
     
-    // For Unsplash URLs
     if (originalUrl.includes('unsplash.com')) {
-      const url = new URL(originalUrl);
-      url.searchParams.set('w', '400');
-      url.searchParams.set('q', '60');
-      return url.toString();
+      try {
+        const url = new URL(originalUrl);
+        url.searchParams.set('w', String(width));
+        url.searchParams.set('q', String(quality));
+        url.searchParams.set('fit', 'crop');
+        return url.toString();
+      } catch {
+        return originalUrl;
+      }
     }
     
-    // For other URLs, return as-is
     return originalUrl;
   };
+
+  const getThumbnailSrcSet = (originalUrl: string, widths: number[], quality: number) => {
+    if (!originalUrl) return undefined;
+    if (originalUrl.includes('supabase.co/storage')) return undefined;
+    const unique = Array.from(new Set(widths.filter((w) => w > 0))).sort((a, b) => a - b);
+    if (unique.length === 0) return undefined;
+    return unique
+      .map((width) => {
+        const height = Math.round(width * 9 / 16);
+        return `${getThumbnailUrl(originalUrl, width, height, quality)} ${width}w`;
+      })
+      .join(', ');
+  };
+
+  const getThumbnailSize = (size: { width: number }) => {
+    const baseWidth = size.width ? Math.min(960, Math.round(size.width * 1.5)) : DEFAULT_THUMB_WIDTH;
+    return { width: baseWidth, height: Math.round(baseWidth * 9 / 16) };
+  };
+
+  const createImageBitmapFallback = async (blob: Blob) => {
+    if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
+      return await createImageBitmap(blob);
+    }
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(blob);
+    });
+  };
+
+  const createThumbnailBlobFromBlob = async (blob: Blob, maxWidth = DEFAULT_THUMB_WIDTH, maxHeight = DEFAULT_THUMB_HEIGHT) => {
+    const image = await createImageBitmapFallback(blob);
+    const originalWidth = (image as ImageBitmap).width ?? (image as HTMLImageElement).width;
+    const originalHeight = (image as ImageBitmap).height ?? (image as HTMLImageElement).height;
+    const scale = Math.min(1, maxWidth / originalWidth, maxHeight / originalHeight);
+    const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+    const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(image as CanvasImageSource, 0, 0, targetWidth, targetHeight);
+
+    const toBlobPromise = (type: string, quality?: number) =>
+      new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+
+    const webpBlob = await toBlobPromise('image/webp', THUMB_QUALITY);
+    if (webpBlob) return webpBlob;
+    return await toBlobPromise('image/jpeg', THUMB_QUALITY);
+  };
+
+  const uploadThumbnailForSnapshot = async (snapshotId: string, thumbnailBlob: Blob) => {
+    const extension = thumbnailBlob.type.includes('webp') ? 'webp' : 'jpg';
+    const file = new File([thumbnailBlob], `thumb-${snapshotId}.${extension}`, { type: thumbnailBlob.type });
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+
+    const url = `https://${projectId}.supabase.co/functions/v1/make-server-7e600dc3/snapshots/${encodeURIComponent(snapshotId)}/thumbnail`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${publicAnonKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Thumbnail upload failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Thumbnail upload failed');
+    }
+
+    return result.snapshot;
+  };
+
 
   // Function to load images from recognize bucket
   const loadRecognizeImages = async () => {
@@ -295,6 +389,8 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
   useEffect(() => {
     loadSnapshots();
     loadInspectionStats();
+    setVisibleSnapshotCount(INITIAL_VISIBLE_COUNT);
+    setVisibleDetectionCount(INITIAL_VISIBLE_COUNT);
   }, [selectedInspection]);
 
   // Reload data when switching tabs
@@ -304,7 +400,47 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
     } else if (activeTab === 'detection-snapshots') {
       loadRecognizeImages();
     }
+    setVisibleDetectionCount(INITIAL_VISIBLE_COUNT);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (backfillRunningRef.current) return;
+    const missingThumbnails = uploadedSnapshots.filter(
+      (snapshot) =>
+        snapshot?.imageUrl &&
+        !snapshot?.thumbnailPath &&
+        !thumbnailJobsRef.current.has(snapshot.id),
+    );
+
+    if (missingThumbnails.length === 0) return;
+
+    backfillRunningRef.current = true;
+    setIsGeneratingThumbnails(true);
+
+    (async () => {
+      for (const snapshot of missingThumbnails) {
+        thumbnailJobsRef.current.add(snapshot.id);
+        try {
+          const response = await fetch(snapshot.imageUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch snapshot image: ${response.status}`);
+          }
+          const originalBlob = await response.blob();
+          const thumbBlob = await createThumbnailBlobFromBlob(originalBlob);
+          if (!thumbBlob) continue;
+          const updatedSnapshot = await uploadThumbnailForSnapshot(snapshot.id, thumbBlob);
+          setUploadedSnapshots((prev) =>
+            prev.map((item) => (item.id === snapshot.id ? { ...item, ...updatedSnapshot } : item)),
+          );
+        } catch (error) {
+          console.error('Thumbnail generation failed:', error);
+        }
+      }
+
+      setIsGeneratingThumbnails(false);
+      backfillRunningRef.current = false;
+    })();
+  }, [uploadedSnapshots]);
 
   // Load weed detection stats when selected image changes
   useEffect(() => {
@@ -491,6 +627,17 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
       if (selectedFile) {
         formDataToSend.append('image', selectedFile);
         console.log('File attached:', selectedFile.name, selectedFile.size);
+
+        try {
+          const thumbBlob = await createThumbnailBlobFromBlob(selectedFile);
+          if (thumbBlob) {
+            const thumbExt = thumbBlob.type.includes('webp') ? 'webp' : 'jpg';
+            const thumbFile = new File([thumbBlob], `thumb-${Date.now()}.${thumbExt}`, { type: thumbBlob.type });
+            formDataToSend.append('thumbnail', thumbFile);
+          }
+        } catch (error) {
+          console.warn('Failed to generate thumbnail for upload:', error);
+        }
       }
 
       const url = `https://${projectId}.supabase.co/functions/v1/make-server-7e600dc3/snapshots`;
@@ -822,37 +969,72 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
                     <CardTitle>Загруженные снимки ({uploadedSnapshots.length})</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {uploadedSnapshots.map((snapshot, index) => (
-                        <div
-                          key={snapshot.id}
-                          className="relative rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-blue-400 transition-colors"
-                          onClick={() => snapshot.imageUrl && handleOpenFullscreen(snapshot.imageUrl, uploadedSnapshots, index)}
-                        >
-                          {snapshot.imageUrl ? (
-                            <div className="aspect-video">
+                    <VirtualizedGrid
+                      items={visibleUploadedSnapshots}
+                      itemKey={(snapshot) => snapshot.id}
+                      className="w-full"
+                      fallbackClassName="grid grid-cols-1 md:grid-cols-3 gap-4"
+                      renderItem={(snapshot, index, size) => {
+                        const thumbSize = getThumbnailSize(size);
+                        const isFallback = size.width === 0;
+                        const previewUrl = snapshot.thumbnailUrl || snapshot.imageUrl;
+                        return (
+                          <div
+                            className={`relative ${isFallback ? 'aspect-video w-full' : 'h-full w-full'} rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-blue-400 transition-colors`}
+                            onClick={() => snapshot.imageUrl && handleOpenFullscreen(snapshot.imageUrl, uploadedSnapshots, index)}
+                          >
+                            {previewUrl ? (
                               <ImageWithFallback
-                                src={getThumbnailUrl(snapshot.imageUrl)}
+                                src={getThumbnailUrl(previewUrl, thumbSize.width, thumbSize.height, 60)}
+                                srcSet={getThumbnailSrcSet(
+                                  previewUrl,
+                                  [Math.round(thumbSize.width * 0.6), thumbSize.width, Math.round(thumbSize.width * 1.6)],
+                                  60,
+                                )}
+                                sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                                width={isFallback ? DEFAULT_THUMB_WIDTH : thumbSize.width}
+                                height={isFallback ? DEFAULT_THUMB_HEIGHT : thumbSize.height}
+                                fallbackSrc={snapshot.imageUrl}
                                 alt={snapshot.name}
                                 className="w-full h-full object-cover"
+                                loading="lazy"
+                                decoding="async"
                               />
-                            </div>
-                          ) : (
-                            <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                              <p className="text-muted-foreground text-sm">Нет изображения</p>
-                            </div>
-                          )}
-
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2">
-                            <p className="text-sm font-medium truncate">{snapshot.name}</p>
-                            <p className="text-xs text-gray-300">{new Date(snapshot.date).toLocaleString('ru-RU')}</p>
-                            {snapshot.coordinates && (
-                              <p className="text-xs text-gray-300">{snapshot.coordinates}</p>
+                            ) : (
+                              <div className={`${isFallback ? 'aspect-video w-full' : 'h-full w-full'} bg-gray-100 flex items-center justify-center`}>
+                                <p className="text-muted-foreground text-sm">Нет изображения</p>
+                              </div>
                             )}
+
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2">
+                              <p className="text-sm font-medium truncate">{snapshot.name}</p>
+                              <p className="text-xs text-gray-300">{new Date(snapshot.date).toLocaleString('ru-RU')}</p>
+                              {snapshot.coordinates && (
+                                <p className="text-xs text-gray-300">{snapshot.coordinates}</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      }}
+                    />
+                    <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+                      <span>
+                        Показано {visibleUploadedSnapshots.length} из {uploadedSnapshots.length}
+                      </span>
+                      {isGeneratingThumbnails && (
+                        <span>Генерация миниатюр…</span>
+                      )}
                     </div>
+                    {uploadedSnapshots.length > visibleSnapshotCount && (
+                      <div className="flex justify-center mt-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setVisibleSnapshotCount((count) => count + LOAD_MORE_COUNT)}
+                        >
+                          Показать ещё
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -881,9 +1063,15 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
                               }}
                             >
                               <ImageWithFallback
-                                src={getThumbnailUrl(image.url)}
+                                src={getThumbnailUrl(image.url, 960, 540, 70)}
+                                srcSet={getThumbnailSrcSet(image.url, [480, 720, 960, 1280], 70)}
+                                sizes="(min-width: 1024px) 50vw, 100vw"
+                                width={960}
+                                height={540}
+                                fallbackSrc={image.url}
                                 alt={`Выбранное изображение БПЛА ${image.id}`}
                                 className="w-full h-full object-cover"
+                                decoding="async"
                               />
                             </div>
                             <Button className="w-full" onClick={() => {
@@ -1022,91 +1210,138 @@ export function InspectionDetails({ inspectionId }: InspectionDetailsProps) {
                       <span className="ml-2 text-muted-foreground">Загрузка изображений...</span>
                     </div>
                   ) : recognizeImages.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {recognizeImages.map((image, index) => (
-                        <div
-                          key={image.id}
-                          className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:border-blue-300 ${
-                            selectedImage === image.id ? 'border-blue-500' : 'border-gray-200'
-                          }`}
-                          onClick={() => setSelectedImage(image.id)}
-                          onDoubleClick={() => handleOpenFullscreen(image.url, recognizeImages, index)}
-                        >
-                          <div className="aspect-video">
+                    <VirtualizedGrid
+                      items={visibleRecognizeImages}
+                      itemKey={(image) => image.id}
+                      className="w-full"
+                      fallbackClassName="grid grid-cols-1 md:grid-cols-3 gap-4"
+                      renderItem={(image, index, size) => {
+                        const thumbSize = getThumbnailSize(size);
+                        const isFallback = size.width === 0;
+                        return (
+                          <div
+                            className={`relative ${isFallback ? 'aspect-video w-full' : 'h-full w-full'} cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:border-blue-300 ${
+                              selectedImage === image.id ? 'border-blue-500' : 'border-gray-200'
+                            }`}
+                            onClick={() => setSelectedImage(image.id)}
+                            onDoubleClick={() => handleOpenFullscreen(image.url, recognizeImages, index)}
+                          >
                             <ImageWithFallback
-                              src={getThumbnailUrl(image.url)}
-                              alt={`И��ображение БПЛА ${image.name}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          
-                          {/* Detection overlay simulation */}
-                          {image.hasDetections && (
-                            <div className="absolute inset-0 pointer-events-none">
-                              <div className="absolute top-1/4 left-1/3 w-8 h-8 border-2 border-red-500 bg-red-500/20 rounded"></div>
-                              <div className="absolute top-1/2 right-1/4 w-6 h-6 border-2 border-red-500 bg-red-500/20 rounded"></div>
-                              {image.detections > 2 && (
-                                <div className="absolute bottom-1/3 left-1/4 w-10 h-10 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                              src={getThumbnailUrl(image.url, thumbSize.width, thumbSize.height, 60)}
+                              srcSet={getThumbnailSrcSet(
+                                image.url,
+                                [Math.round(thumbSize.width * 0.6), thumbSize.width, Math.round(thumbSize.width * 1.6)],
+                                60,
                               )}
-                            </div>
-                          )}
+                              sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                              width={isFallback ? DEFAULT_THUMB_WIDTH : thumbSize.width}
+                              height={isFallback ? DEFAULT_THUMB_HEIGHT : thumbSize.height}
+                              fallbackSrc={image.url}
+                              alt={`Изображение БПЛА ${image.name}`}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
 
-                          <div className="absolute top-2 right-2">
-                            <Badge className="bg-red-500 text-white">
-                              {image.detections} сорняков
-                            </Badge>
-                          </div>
-
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2">
-                            <p className="text-xs truncate">{image.name}</p>
-                            <p className="text-xs">{image.timestamp}</p>
-                            <p className="text-xs text-gray-300">{image.coordinates}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {mockUAVImages.map((image, index) => (
-                      <div
-                        key={image.id}
-                        className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:border-blue-300 ${
-                          selectedImage === image.id ? 'border-blue-500' : 'border-gray-200'
-                        }`}
-                        onClick={() => setSelectedImage(image.id)}
-                        onDoubleClick={() => handleOpenFullscreen(image.url, mockUAVImages, index)}
-                      >
-                        <div className="aspect-video">
-                          <ImageWithFallback
-                            src={getThumbnailUrl(image.url)}
-                            alt={`Изображение БПЛА ${image.id}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        
-                        {/* Detection overlay simulation */}
-                        {image.hasDetections && (
-                          <div className="absolute inset-0 pointer-events-none">
-                            <div className="absolute top-1/4 left-1/3 w-8 h-8 border-2 border-red-500 bg-red-500/20 rounded"></div>
-                            <div className="absolute top-1/2 right-1/4 w-6 h-6 border-2 border-red-500 bg-red-500/20 rounded"></div>
-                            {image.detections > 2 && (
-                              <div className="absolute bottom-1/3 left-1/4 w-10 h-10 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                            {/* Detection overlay simulation */}
+                            {image.hasDetections && (
+                              <div className="absolute inset-0 pointer-events-none">
+                                <div className="absolute top-1/4 left-1/3 w-8 h-8 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                                <div className="absolute top-1/2 right-1/4 w-6 h-6 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                                {image.detections > 2 && (
+                                  <div className="absolute bottom-1/3 left-1/4 w-10 h-10 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                                )}
+                              </div>
                             )}
+
+                            <div className="absolute top-2 right-2">
+                              <Badge className="bg-red-500 text-white">
+                                {image.detections} сорняков
+                              </Badge>
+                            </div>
+
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2">
+                              <p className="text-xs truncate">{image.name}</p>
+                              <p className="text-xs">{image.timestamp}</p>
+                              <p className="text-xs text-gray-300">{image.coordinates}</p>
+                            </div>
                           </div>
-                        )}
+                        );
+                      }}
+                    />
+                  ) : (
+                    <VirtualizedGrid
+                      items={visibleMockImages}
+                      itemKey={(image) => image.id}
+                      className="w-full"
+                      fallbackClassName="grid grid-cols-1 md:grid-cols-3 gap-4"
+                      renderItem={(image, index, size) => {
+                        const thumbSize = getThumbnailSize(size);
+                        const isFallback = size.width === 0;
+                        return (
+                          <div
+                            className={`relative ${isFallback ? 'aspect-video w-full' : 'h-full w-full'} cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:border-blue-300 ${
+                              selectedImage === image.id ? 'border-blue-500' : 'border-gray-200'
+                            }`}
+                            onClick={() => setSelectedImage(image.id)}
+                            onDoubleClick={() => handleOpenFullscreen(image.url, mockUAVImages, index)}
+                          >
+                            <ImageWithFallback
+                              src={getThumbnailUrl(image.url, thumbSize.width, thumbSize.height, 60)}
+                              srcSet={getThumbnailSrcSet(
+                                image.url,
+                                [Math.round(thumbSize.width * 0.6), thumbSize.width, Math.round(thumbSize.width * 1.6)],
+                                60,
+                              )}
+                              sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                              width={isFallback ? DEFAULT_THUMB_WIDTH : thumbSize.width}
+                              height={isFallback ? DEFAULT_THUMB_HEIGHT : thumbSize.height}
+                              fallbackSrc={image.url}
+                              alt={`Изображение БПЛА ${image.id}`}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            
+                            {/* Detection overlay simulation */}
+                            {image.hasDetections && (
+                              <div className="absolute inset-0 pointer-events-none">
+                                <div className="absolute top-1/4 left-1/3 w-8 h-8 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                                <div className="absolute top-1/2 right-1/4 w-6 h-6 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                                {image.detections > 2 && (
+                                  <div className="absolute bottom-1/3 left-1/4 w-10 h-10 border-2 border-red-500 bg-red-500/20 rounded"></div>
+                                )}
+                              </div>
+                            )}
 
-                        <div className="absolute top-2 right-2">
-                          <Badge className="bg-red-500 text-white">
-                            {image.detections} сорняков
-                          </Badge>
-                        </div>
+                            <div className="absolute top-2 right-2">
+                              <Badge className="bg-red-500 text-white">
+                                {image.detections} сорняков
+                              </Badge>
+                            </div>
 
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2">
-                          <p className="text-xs">{image.timestamp}</p>
-                          <p className="text-xs text-gray-300">{image.coordinates}</p>
-                        </div>
-                      </div>
-                    ))}
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2">
+                              <p className="text-xs">{image.timestamp}</p>
+                              <p className="text-xs text-gray-300">{image.coordinates}</p>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                  )}
+                  <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+                    <span>
+                      Показано {recognizeImages.length > 0 ? visibleRecognizeImages.length : visibleMockImages.length} из {recognizeImages.length > 0 ? recognizeImages.length : mockUAVImages.length}
+                    </span>
+                  </div>
+                  {(recognizeImages.length > 0 ? recognizeImages.length : mockUAVImages.length) > visibleDetectionCount && (
+                    <div className="flex justify-center mt-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setVisibleDetectionCount((count) => count + LOAD_MORE_COUNT)}
+                      >
+                        Показать ещё
+                      </Button>
                     </div>
                   )}
                 </CardContent>
